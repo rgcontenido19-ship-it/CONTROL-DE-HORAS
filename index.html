@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONTROL DE HORAS Pro — Control de Horas y Horas Extras</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para gráficos semanales -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#151e2e',
+                            900: '#0f172a',
+                            950: '#090d16',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Animación sutil para el indicador de grabación/turno activo */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            80%, 100% { transform: scale(2); opacity: 0; }
+        }
+        .pulse-dot::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 9999px;
+            background-color: inherit;
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        /* Scrollbar limpio */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200 selection:bg-indigo-500 selection:text-white">
+
+    <!-- Notificación Toast Flotante -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Barra de Navegación Superior -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Logo y Título -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid fa-stopwatch text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight leading-none">TimeTrack <span class="text-indigo-500">Pro</span></h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1">
+                        <i class="fa-solid fa-shield-halved text-emerald-500 text-[10px]"></i> Almacenamiento Local Seguro
+                    </p>
+                </div>
+            </div>
+
+            <!-- Navegación Desktop -->
+            <nav class="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-850 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm">
+                    <i class="fa-solid fa-chart-pie"></i> Panel y Reloj
+                </button>
+                <button onclick="switchTab('history')" id="nav-history" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                    <i class="fa-solid fa-list-check"></i> Historial
+                </button>
+                <button onclick="switchTab('report')" id="nav-report" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                    <i class="fa-solid fa-file-lines"></i> Reporte Semanal
+                </button>
+                <button onclick="switchTab('settings')" id="nav-settings" class="nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                    <i class="fa-solid fa-sliders"></i> Configuración
+                </button>
+            </nav>
+
+            <!-- Acciones Rápidas Header -->
+            <div class="flex items-center gap-2">
+                <button onclick="openManualModal()" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-sm font-medium transition-colors flex items-center gap-2" title="Registrar jornada manualmente">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="hidden sm:inline">Registro Manual</span>
+                </button>
+                <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors" title="Cambiar tema claro/oscuro">
+                    <i id="theme-icon" class="fa-solid fa-sun"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Navegación Móvil -->
+        <div class="md:hidden flex border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
+            <button onclick="switchTab('dashboard')" id="mob-dashboard" class="mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500">
+                <i class="fa-solid fa-chart-pie text-sm"></i> Panel
+            </button>
+            <button onclick="switchTab('history')" id="mob-history" class="mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 border-b-2 border-transparent">
+                <i class="fa-solid fa-list-check text-sm"></i> Historial
+            </button>
+            <button onclick="switchTab('report')" id="mob-report" class="mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 border-b-2 border-transparent">
+                <i class="fa-solid fa-file-lines text-sm"></i> Reporte
+            </button>
+            <button onclick="switchTab('settings')" id="mob-settings" class="mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 border-b-2 border-transparent">
+                <i class="fa-solid fa-sliders text-sm"></i> Ajustes
+            </button>
+        </div>
+    </header>
+
+    <!-- Contenedor Principal -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 1: PANEL Y RELOJ CHECADOR          -->
+        <!-- ========================================== -->
+        <section id="tab-dashboard" class="tab-content space-y-6">
+            
+            <!-- Tarjeta Principal del Reloj Checador -->
+            <div id="clock-card" class="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 sm:p-8 transition-all duration-300">
+                <!-- Decoración de fondo dinámica según estado -->
+                <div id="clock-glow" class="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none transition-colors duration-500"></div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                    
+                    <!-- Columna Izquierda: Estado y Cronómetro -->
+                    <div class="lg:col-span-7 space-y-4">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <!-- Badge de Estado -->
+                            <span id="status-badge" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                <span id="status-dot" class="relative w-2 h-2 rounded-full bg-slate-400"></span>
+                                <span id="status-text">Fuera de turno</span>
+                            </span>
+
+                            <!-- Información del día actual -->
+                            <span id="today-info-badge" class="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-850 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-800">
+                                Cargando fecha...
+                            </span>
+                        </div>
+
+                        <!-- Cronómetro Gigante -->
+                        <div>
+                            <p class="text-xs uppercase tracking-wider font-semibold text-slate-400 mb-1">Tiempo Total Trabajado Hoy</p>
+                            <div id="main-timer" class="font-mono text-5xl sm:text-6xl font-bold tracking-tight text-slate-900 dark:text-white">
+                                00:00:00
+                            </div>
+                        </div>
+
+                        <!-- Desglose en vivo: Normal vs Extra -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800">
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Horas Normales Hoy</p>
+                                <p id="live-normal-time" class="font-mono font-bold text-base sm:text-lg text-emerald-600 dark:text-emerald-400 mt-0.5">00:00:00</p>
+                            </div>
+                            <div id="live-overtime-box" class="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 transition-colors">
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Horas Extras Hoy</p>
+                                <p id="live-overtime-time" class="font-mono font-bold text-base sm:text-lg text-slate-400 mt-0.5">00:00:00</p>
+                            </div>
+                            <div class="col-span-2 sm:col-span-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800">
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Ganancia Extra Hoy</p>
+                                <p id="live-overtime-money" class="font-mono font-bold text-base sm:text-lg text-amber-500 mt-0.5">$0.00</p>
+                            </div>
+                        </div>
+
+                        <!-- Barra de progreso de la jornada diaria -->
+                        <div class="pt-1">
+                            <div class="flex justify-between text-xs font-medium mb-1.5">
+                                <span class="text-slate-500 dark:text-slate-400">Progreso jornada base de hoy (<span id="today-target-hours">8</span>h)</span>
+                                <span id="today-progress-pct" class="text-indigo-600 dark:text-indigo-400 font-bold">0%</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div id="today-progress-bar" class="h-full bg-indigo-600 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Botones de Acción -->
+                    <div class="lg:col-span-5 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-850/60 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 space-y-4">
+                        
+                        <!-- Botón Principal Entrada / Salida -->
+                        <button id="btn-clock-toggle" onclick="handleClockToggle()" class="w-full py-5 px-6 rounded-2xl font-bold text-lg text-white shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/25">
+                            <i id="btn-clock-icon" class="fa-solid fa-play text-xl"></i>
+                            <span id="btn-clock-label">Marcar Entrada</span>
+                        </button>
+
+                        <!-- Botón Secundario: Pausar / Reanudar Descanso -->
+                        <button id="btn-pause-toggle" onclick="handlePauseToggle()" disabled class="w-full py-3 px-4 rounded-xl font-semibold text-sm border border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i id="btn-pause-icon" class="fa-solid fa-mug-hot"></i>
+                            <span id="btn-pause-label">Pausar / Descanso</span>
+                        </button>
+
+                        <p id="session-start-info" class="text-xs text-center text-slate-500 dark:text-slate-400">
+                            Presiona "Marcar Entrada" para iniciar tu jornada laboral.
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Tarjetas KPI Semanales -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- KPI 1: Horas Normales Semana -->
+                <div class="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Horas Normales</span>
+                        <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                            <i class="fa-solid fa-briefcase"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline gap-2">
+                        <h3 id="kpi-normal-hours" class="text-2xl sm:text-3xl font-bold font-mono">0.00h</h3>
+                        <span id="kpi-target-week" class="text-xs text-slate-400">/ 40h meta</span>
+                    </div>
+                    <div class="mt-3 w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div id="kpi-week-bar" class="h-full bg-indigo-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- KPI 2: Horas Extras Semana -->
+                <div class="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Horas Extras</span>
+                        <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline gap-2">
+                        <h3 id="kpi-overtime-hours" class="text-2xl sm:text-3xl font-bold font-mono text-amber-500">0.00h</h3>
+                        <span class="text-xs text-slate-400">esta semana</span>
+                    </div>
+                    <p id="kpi-overtime-days" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
+                        En 0 días de la semana
+                    </p>
+                </div>
+
+                <!-- KPI 3: Monto Estimado Extras -->
+                <div class="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Valor Extras</span>
+                        <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                            <i class="fa-solid fa-sack-dollar"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline gap-2">
+                        <h3 id="kpi-overtime-money" class="text-2xl sm:text-3xl font-bold font-mono text-emerald-500">$0.00</h3>
+                    </div>
+                    <p id="kpi-rate-info" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
+                        Tarifa: $0.00 / hora extra
+                    </p>
+                </div>
+
+                <!-- KPI 4: Total General Semana -->
+                <div class="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Trabajado</span>
+                        <div class="w-9 h-9 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center">
+                            <i class="fa-solid fa-clock"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-baseline gap-2">
+                        <h3 id="kpi-total-hours" class="text-2xl sm:text-3xl font-bold font-mono">0.00h</h3>
+                        <span class="text-xs text-slate-400">acumuladas</span>
+                    </div>
+                    <p id="kpi-week-range" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">
+                        Semana actual (Lun - Dom)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Gráfico Semanal y Resumen Rápido -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Gráfico de Barras Apiladas -->
+                <div class="lg:col-span-2 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="font-bold text-base">Distribución Semanal de Horas</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Comparativa diaria de horas normales vs. horas extras (Lunes a Domingo)</p>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs font-medium">
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-indigo-500 inline-block"></span> Normales</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-amber-500 inline-block"></span> Extras</span>
+                        </div>
+                    </div>
+                    <div class="relative h-64 w-full">
+                        <canvas id="weeklyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Desglose Diario de la Semana Actual -->
+                <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-bold text-base">Resumen por Día</h3>
+                        <button onclick="switchTab('report')" class="text-xs font-semibold text-indigo-500 hover:text-indigo-400">Ver Reporte →</button>
+                    </div>
+                    <div id="weekly-breakdown-list" class="space-y-2.5 flex-1 overflow-y-auto pr-1">
+                        <!-- Se llena dinámicamente con JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 2: HISTORIAL DE REGISTROS          -->
+        <!-- ========================================== -->
+        <section id="tab-history" class="tab-content hidden space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                    <h2 class="text-xl font-bold">Historial de Jornadas</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Consulta, edita o elimina tus turnos registrados.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <select id="history-filter" onchange="renderHistory()" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="current_week">Esta Semana</option>
+                        <option value="last_week">Semana Pasada</option>
+                        <option value="all">Todos los Registros</option>
+                    </select>
+                    <button onclick="openManualModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Agregar Turno
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de Historial -->
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50 text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                <th class="py-3.5 px-4 font-semibold">Fecha / Día</th>
+                                <th class="py-3.5 px-4 font-semibold">Horario</th>
+                                <th class="py-3.5 px-4 font-semibold">Total</th>
+                                <th class="py-3.5 px-4 font-semibold">Normales</th>
+                                <th class="py-3.5 px-4 font-semibold">Extras</th>
+                                <th class="py-3.5 px-4 font-semibold">Pago Extra</th>
+                                <th class="py-3.5 px-4 font-semibold">Nota</th>
+                                <th class="py-3.5 px-4 font-semibold text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body" class="divide-y divide-slate-200 dark:divide-slate-800 text-sm">
+                            <!-- Se llena dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="history-empty-state" class="hidden py-12 text-center">
+                    <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                        <i class="fa-regular fa-calendar-xmark text-xl"></i>
+                    </div>
+                    <p class="text-slate-500 dark:text-slate-400 font-medium">No hay registros en este período.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 3: REPORTE SEMANAL Y EXPORTACIÓN   -->
+        <!-- ========================================== -->
+        <section id="tab-report" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Controles del Reporte -->
+                <div class="lg:col-span-5 space-y-6">
+                    <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                        <h2 class="text-xl font-bold">Generador de Reporte</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">
+                            Obtén un resumen detallado listo para enviar por WhatsApp, correo electrónico o descargar como archivo de texto (.txt).
+                        </p>
+
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Seleccionar Semana</label>
+                            <select id="report-week-select" onchange="generateReportPreview()" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="0">Semana Actual</option>
+                                <option value="-1">Semana Pasada</option>
+                                <option value="-2">Hace 2 Semanas</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">Nombre del Empleado / Referencia (Opcional)</label>
+                            <input type="text" id="report-employee-name" oninput="saveEmployeeName(); generateReportPreview()" placeholder="Ej: Juan Pérez - Área Logística" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+
+                        <div class="pt-2 space-y-3">
+                            <button onclick="copyReportToClipboard()" class="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
+                                <i class="fa-regular fa-copy text-base"></i> Copiar Mensaje al Portapapeles
+                            </button>
+
+                            <button onclick="downloadReportTxt()" class="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-file-arrow-down text-base"></i> Descargar Archivo (.txt)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Previa del Texto -->
+                <div class="lg:col-span-7">
+                    <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 h-full flex flex-col">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <i class="fa-solid fa-eye text-indigo-500"></i> Vista Previa del Reporte
+                            </span>
+                            <span class="text-xs text-slate-400">Formato texto plano / WhatsApp</span>
+                        </div>
+                        <textarea id="report-preview-text" readonly class="w-full flex-1 min-h-[340px] p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200 focus:outline-none resize-none"></textarea>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- PESTAÑA 4: CONFIGURACIÓN Y SEGURIDAD       -->
+        <!-- ========================================== -->
+        <section id="tab-settings" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Configuración de Horario Semanal Base -->
+                <div class="lg:col-span-7 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+                        <div>
+                            <h2 class="text-lg font-bold">Jornada Base Semanal (Lunes a Domingo)</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Define cuántas horas normales corresponden a cada día. Al superar este límite comenzarán las horas extras.</p>
+                        </div>
+                        <button onclick="applyStandardWeek()" class="px-3 py-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-semibold transition-colors">
+                            Aplicar 8h Lun-Vie
+                        </button>
+                    </div>
+
+                    <div class="space-y-3" id="schedule-inputs-container">
+                        <!-- Lunes (1) a Domingo (0) -->
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm">Lunes</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-1" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm">Martes</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-2" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm">Miércoles</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-3" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm">Jueves</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-4" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm">Viernes</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-5" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm text-amber-600 dark:text-amber-400">Sábado</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-6" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base (0 = todo extra)</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-12 items-center gap-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-850">
+                            <span class="col-span-5 sm:col-span-4 font-medium text-sm text-amber-600 dark:text-amber-400">Domingo</span>
+                            <div class="col-span-7 sm:col-span-8 flex items-center gap-2">
+                                <input type="number" step="0.5" min="0" max="24" id="cfg-day-0" class="w-24 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-mono text-sm text-center">
+                                <span class="text-xs text-slate-500">horas base (0 = todo extra)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+                        <span class="text-sm text-slate-500">Total Meta Semanal: <strong id="cfg-total-weekly-hours" class="text-slate-900 dark:text-white font-mono">40h</strong></span>
+                        <button onclick="saveSettings()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-lg shadow-indigo-500/20 transition-all">
+                            Guardar Configuración
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Valor de Hora Extra y Respaldo de Seguridad -->
+                <div class="lg:col-span-5 space-y-6">
+                    <!-- Tarifa Hora Extra -->
+                    <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-coins text-amber-500"></i> Valor de Hora Extra
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Configura cuánto ganas por cada hora extra trabajada. Se calculará automáticamente en tiempo real.
+                        </p>
+
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Moneda</label>
+                                <select id="cfg-currency" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm font-bold">
+                                    <option value="$">$ (USD/ARS/MXN)</option>
+                                    <option value="€">€ (EUR)</option>
+                                    <option value="S/">S/ (PEN)</option>
+                                    <option value="Bs">Bs (BOB/VES)</option>
+                                    <option value="₲">₲ (PYG)</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1">Valor por 1 Hora Extra</label>
+                                <input type="number" step="0.01" min="0" id="cfg-overtime-rate" placeholder="15.00" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 font-mono text-sm font-bold">
+                            </div>
+                        </div>
+
+                        <button onclick="saveSettings()" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-semibold text-sm transition-colors">
+                            Actualizar Tarifa
+                        </button>
+                    </div>
+
+                    <!-- Seguridad y Copias de Respaldo -->
+                    <div class="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-emerald-500"></i> Seguridad y Respaldo
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Tus registros se almacenan 100% de forma privada en tu dispositivo. Exporta una copia de seguridad periódicamente para no perder tus datos si limpias el navegador.
+                        </p>
+
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <button onclick="exportBackupJSON()" class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+                                <i class="fa-solid fa-download text-indigo-500"></i> Exportar Respaldo
+                            </button>
+                            <label class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                                <i class="fa-solid fa-upload text-emerald-500"></i> Restaurar Respaldo
+                                <input type="file" accept=".json" onchange="importBackupJSON(event)" class="hidden">
+                            </label>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-200 dark:border-slate-800">
+                            <button onclick="openResetConfirm()" class="w-full py-2 px-3 rounded-xl text-rose-500 hover:bg-rose-500/10 text-xs font-semibold transition-colors flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-trash-can"></i> Borrar todos los datos de la app
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- MODAL: REGISTRO MANUAL / EDICIÓN DE TURNO  -->
+    <!-- ========================================== -->
+    <div id="manual-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <h3 id="modal-title" class="font-bold text-lg">Registrar Jornada Manual</h3>
+                <button onclick="closeManualModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="manual-form" onsubmit="saveManualEntry(event)" class="space-y-4">
+                <input type="hidden" id="edit-entry-id">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Fecha de la jornada</label>
+                    <input type="date" id="manual-date" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Hora de Entrada</label>
+                        <input type="time" id="manual-start" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Hora de Salida</label>
+                        <input type="time" id="manual-end" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm font-mono">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Minutos de descanso (no remunerado)</label>
+                    <input type="number" min="0" max="480" id="manual-break" value="0" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Nota o actividad (Opcional)</label>
+                    <input type="text" id="manual-note" placeholder="Ej: Cierre de inventario, soporte nocturno..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-300 dark:border-slate-700 text-sm">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeManualModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-medium">Cancelar</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold">Guardar Jornada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL: CONFIRMACIÓN SEGURA (SIN ALERT)     -->
+    <!-- ========================================== -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+                <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+            </div>
+            <h3 id="confirm-title" class="font-bold text-lg">¿Estás seguro?</h3>
+            <p id="confirm-desc" class="text-sm text-slate-500 dark:text-slate-400">Esta acción no se puede deshacer.</p>
+            <div class="flex gap-3 pt-2">
+                <button onclick="closeConfirmModal()" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm font-semibold">Cancelar</button>
+                <button id="confirm-action-btn" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- LÓGICA JAVASCRIPT DE LA APLICACIÓN         -->
+    <!-- ========================================== -->
+    <script>
+        // --- ESTADO GLOBAL Y CONFIGURACIÓN POR DEFECTO ---
+        const STORAGE_KEY = 'timetrack_pro_data_v1';
+        const DAYS_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        // Orden visual Lunes a Domingo (índices de Date.getDay())
+        const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+        let appState = {
+            settings: {
+                // Horas base por día (0=Dom, 1=Lun, ..., 6=Sab)
+                schedule: { 1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 0, 0: 0 },
+                overtimeRate: 15.00,
+                currency: '$',
+                employeeName: '',
+                theme: 'dark'
+            },
+            // Sesión activa actualmente en el reloj checador
+            activeSession: null, // { startTime: timestamp, dateStr: 'YYYY-MM-DD', pausedMs: 0, isPaused: false, pauseStart: null }
+            // Historial de turnos completados
+            entries: [] // { id, dateStr, startTime, endTime, durationMs, note }
+        };
+
+        let timerInterval = null;
+        let weeklyChartInstance = null;
+
+        // --- INICIALIZACIÓN ---
+        window.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            applyTheme(appState.settings.theme);
+            populateSettingsUI();
+            initChart();
+            updateAllUI();
+            
+            // Iniciar ticker cada segundo para reloj en vivo
+            timerInterval = setInterval(() => {
+                updateLiveClockUI();
+            }, 1000);
+        });
+
+        // --- PERSISTENCIA SEGURA EN LOCALSTORAGE ---
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    appState = {
+                        ...appState,
+                        ...parsed,
+                        settings: { ...appState.settings, ...(parsed.settings || {}) }
+                    };
+                }
+            } catch (e) {
+                console.error('Error cargando datos locales:', e);
+                showToast('Error al leer datos guardados', 'error');
+            }
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error('Error guardando datos:', e);
+                showToast('No se pudieron guardar los cambios en el navegador', 'error');
+            }
+        }
+
+        // --- UTILIDADES DE FECHA Y TIEMPO ---
+        function getTodayStr(dateObj = new Date()) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function parseLocalDate(dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        // Obtiene el Lunes de la semana correspondiente a una fecha (offsetWeeks: 0 = actual, -1 = pasada)
+        function getWeekBounds(offsetWeeks = 0) {
+            const now = new Date();
+            const day = now.getDay(); // 0 (Dom) a 6 (Sab)
+            const diffToMonday = day === 0 ? -6 : 1 - day;
+            
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday + (offsetWeeks * 7));
+            monday.setHours(0, 0, 0, 0);
+            
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            sunday.setHours(23, 59, 59, 999);
+            
+            return { monday, sunday };
+        }
+
+        function formatHMS(ms) {
+            if (ms < 0) ms = 0;
+            const totalSeconds = Math.floor(ms / 1000);
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        function formatDecimalHours(ms) {
+            return (ms / 3600000).toFixed(2);
+        }
+
+        function formatMoney(amount) {
+            return `${appState.settings.currency}${amount.toFixed(2)}`;
+        }
+
+        // Calcula el tiempo activo en milisegundos de la sesión en curso
+        function getActiveSessionDurationMs() {
+            const s = appState.activeSession;
+            if (!s) return 0;
+            const now = Date.now();
+            let currentPaused = s.pausedMs || 0;
+            if (s.isPaused && s.pauseStart) {
+                currentPaused += (now - s.pauseStart);
+            }
+            return Math.max(0, now - s.startTime - currentPaused);
+        }
+
+        // Calcula horas normales y extras para una fecha específica dado un total de ms trabajados ese día
+        function calculateDaySplit(dateStr, totalDayMs) {
+            const dateObj = parseLocalDate(dateStr);
+            const dayOfWeek = dateObj.getDay();
+            const baseHours = parseFloat(appState.settings.schedule[dayOfWeek] || 0);
+            const baseMs = baseHours * 3600000;
+
+            const normalMs = Math.min(totalDayMs, baseMs);
+            const overtimeMs = Math.max(0, totalDayMs - baseMs);
+            const overtimePay = (overtimeMs / 3600000) * parseFloat(appState.settings.overtimeRate || 0);
+
+            return { baseHours, normalMs, overtimeMs, overtimePay };
+        }
+
+        // --- LÓGICA DEL RELOJ CHECADOR ---
+        function handleClockToggle() {
+            if (!appState.activeSession) {
+                // MARCAR ENTRADA
+                const now = Date.now();
+                appState.activeSession = {
+                    startTime: now,
+                    dateStr: getTodayStr(new Date(now)),
+                    pausedMs: 0,
+                    isPaused: false,
+                    pauseStart: null
+                };
+                saveState();
+                updateAllUI();
+                showToast('¡Entrada registrada! Tu jornada ha comenzado.', 'success');
+            } else {
+                // MARCAR SALIDA
+                const s = appState.activeSession;
+                const endTime = Date.now();
+                const durationMs = getActiveSessionDurationMs();
+
+                if (durationMs < 1000) {
+                    showToast('El turno es demasiado corto para guardarse.', 'warning');
+                    appState.activeSession = null;
+                    saveState();
+                    updateAllUI();
+                    return;
+                }
+
+                const newEntry = {
+                    id: 'entry_' + Date.now(),
+                    dateStr: s.dateStr,
+                    startTime: s.startTime,
+                    endTime: endTime,
+                    durationMs: durationMs,
+                    note: 'Registro de reloj'
+                };
+
+                appState.entries.push(newEntry);
+                appState.activeSession = null;
+                saveState();
+                updateAllUI();
+                showToast('¡Salida registrada! Jornada guardada en tu historial.', 'success');
+            }
+        }
+
+        function handlePauseToggle() {
+            const s = appState.activeSession;
+            if (!s) return;
+
+            if (!s.isPaused) {
+                // Iniciar pausa
+                s.isPaused = true;
+                s.pauseStart = Date.now();
+                showToast('Jornada en pausa (Descanso)', 'info');
+            } else {
+                // Reanudar
+                if (s.pauseStart) {
+                    s.pausedMs = (s.pausedMs || 0) + (Date.now() - s.pauseStart);
+                }
+                s.isPaused = false;
+                s.pauseStart = null;
+                showToast('Jornada reanudada', 'success');
+            }
+            saveState();
+            updateLiveClockUI();
+        }
+
+        // --- ACTUALIZACIÓN DE INTERFAZ EN TIEMPO REAL ---
+        function updateLiveClockUI() {
+            const todayStr = getTodayStr();
+            const todayObj = new Date();
+            const dayName = DAYS_NAMES[todayObj.getDay()];
+            const baseHoursToday = parseFloat(appState.settings.schedule[todayObj.getDay()] || 0);
+
+            document.getElementById('today-info-badge').textContent = `${dayName}, ${todayObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} • Meta: ${baseHoursToday}h`;
+            document.getElementById('today-target-hours').textContent = baseHoursToday;
+
+            // Sumar turnos ya cerrados hoy + sesión activa hoy
+            const closedTodayMs = appState.entries
+                .filter(e => e.dateStr === todayStr)
+                .reduce((acc, e) => acc + e.durationMs, 0);
+
+            const activeMs = (appState.activeSession && appState.activeSession.dateStr === todayStr)
+                ? getActiveSessionDurationMs()
+                : (appState.activeSession ? getActiveSessionDurationMs() : 0);
+
+            const totalTodayMs = closedTodayMs + activeMs;
+            const split = calculateDaySplit(todayStr, totalTodayMs);
+            const isOvertime = split.overtimeMs > 0;
+
+            // Actualizar textos de cronómetros
+            document.getElementById('main-timer').textContent = formatHMS(totalTodayMs);
+            document.getElementById('live-normal-time').textContent = formatHMS(split.normalMs);
+            document.getElementById('live-overtime-time').textContent = formatHMS(split.overtimeMs);
+            document.getElementById('live-overtime-money').textContent = formatMoney(split.overtimePay);
+
+            // Barra de progreso diaria
+            let pct = baseHoursToday > 0 ? Math.min(100, Math.round((split.normalMs / (baseHoursToday * 3600000)) * 100)) : (totalTodayMs > 0 ? 100 : 0);
+            document.getElementById('today-progress-pct').textContent = `${pct}%`;
+            document.getElementById('today-progress-bar').style.width = `${pct}%`;
+
+            // Estilos dinámicos según estado (Inactivo / Activo Normal / Pausado / EN HORAS EXTRAS)
+            const badge = document.getElementById('status-badge');
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            const glow = document.getElementById('clock-glow');
+            const otBox = document.getElementById('live-overtime-box');
+            const otTime = document.getElementById('live-overtime-time');
+            const btnToggle = document.getElementById('btn-clock-toggle');
+            const btnIcon = document.getElementById('btn-clock-icon');
+            const btnLabel = document.getElementById('btn-clock-label');
+            const btnPause = document.getElementById('btn-pause-toggle');
+            const btnPauseLabel = document.getElementById('btn-pause-label');
+            const startInfo = document.getElementById('session-start-info');
+
+            if (!appState.activeSession) {
+                // Estado: Fuera de turno
+                badge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+                dot.className = 'relative w-2 h-2 rounded-full bg-slate-400';
+                statusText.textContent = 'Fuera de turno';
+                glow.className = 'absolute -top-24 -right-24 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none';
+
+                btnToggle.className = 'w-full py-5 px-6 rounded-2xl font-bold text-lg text-white shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/25';
+                btnIcon.className = 'fa-solid fa-play text-xl';
+                btnLabel.textContent = 'Marcar Entrada';
+
+                btnPause.disabled = true;
+                btnPauseLabel.textContent = 'Pausar / Descanso';
+                startInfo.textContent = 'Presiona "Marcar Entrada" para iniciar tu jornada laboral.';
+            } else {
+                // Estado: Turno Activo
+                const s = appState.activeSession;
+                const startFormatted = new Date(s.startTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                startInfo.textContent = `Entrada marcada a las ${startFormatted} hrs`;
+
+                btnToggle.className = 'w-full py-5 px-6 rounded-2xl font-bold text-lg text-white shadow-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 shadow-rose-500/25';
+                btnIcon.className = 'fa-solid fa-stop text-xl';
+                btnLabel.textContent = 'Marcar Salida';
+
+                btnPause.disabled = false;
+                if (s.isPaused) {
+                    badge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-500 border border-sky-500/20';
+                    dot.className = 'relative w-2 h-2 rounded-full bg-sky-500';
+                    statusText.textContent = 'En Descanso / Pausado';
+                    btnPauseLabel.textContent = 'Reanudar Jornada';
+                } else if (isOvertime) {
+                    badge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30';
+                    dot.className = 'relative w-2 h-2 rounded-full bg-amber-500 pulse-dot';
+                    statusText.textContent = '⚡ EN HORAS EXTRAS';
+                    glow.className = 'absolute -top-24 -right-24 w-72 h-72 rounded-full bg-amber-500/20 blur-3xl pointer-events-none';
+                    btnPauseLabel.textContent = 'Pausar / Descanso';
+                } else {
+                    badge.className = 'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30';
+                    dot.className = 'relative w-2 h-2 rounded-full bg-emerald-500 pulse-dot';
+                    statusText.textContent = 'Jornada Activa (Normal)';
+                    glow.className = 'absolute -top-24 -right-24 w-64 h-64 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none';
+                    btnPauseLabel.textContent = 'Pausar / Descanso';
+                }
+            }
+
+            // Resaltar caja de horas extras si hay tiempo extra hoy
+            if (isOvertime) {
+                otBox.className = 'p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 transition-colors';
+                otTime.className = 'font-mono font-bold text-base sm:text-lg text-amber-500 mt-0.5';
+            } else {
+                otBox.className = 'p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 transition-colors';
+                otTime.className = 'font-mono font-bold text-base sm:text-lg text-slate-400 mt-0.5';
+            }
+        }
+
+        // --- CÁLCULO DE ESTADÍSTICAS SEMANALES ---
+        function getWeeklyStats(offsetWeeks = 0) {
+            const { monday, sunday } = getWeekBounds(offsetWeeks);
+            const dailyData = [];
+
+            let totalNormalMs = 0;
+            let totalOvertimeMs = 0;
+            let totalOvertimePay = 0;
+            let totalTargetHours = 0;
+            let overtimeDaysCount = 0;
+
+            for (let i = 0; i < 7; i++) {
+                const currentDay = new Date(monday);
+                currentDay.setDate(monday.getDate() + i);
+                const dateStr = getTodayStr(currentDay);
+                const dayOfWeek = currentDay.getDay();
+
+                // Sumar entradas de ese día
+                let dayMs = appState.entries
+                    .filter(e => e.dateStr === dateStr)
+                    .reduce((sum, e) => sum + e.durationMs, 0);
+
+                // Si es hoy y hay sesión activa, incluirla
+                if (appState.activeSession && appState.activeSession.dateStr === dateStr) {
+                    dayMs += getActiveSessionDurationMs();
+                }
+
+                const split = calculateDaySplit(dateStr, dayMs);
+                totalNormalMs += split.normalMs;
+                totalOvertimeMs += split.overtimeMs;
+                totalOvertimePay += split.overtimePay;
+                totalTargetHours += split.baseHours;
+                if (split.overtimeMs > 0) overtimeDaysCount++;
+
+                dailyData.push({
+                    dateStr,
+                    dayName: DAYS_NAMES[dayOfWeek],
+                    shortName: DAYS_NAMES[dayOfWeek].substring(0, 3),
+                    baseHours: split.baseHours,
+                    totalMs: dayMs,
+                    normalMs: split.normalMs,
+                    overtimeMs: split.overtimeMs,
+                    overtimePay: split.overtimePay
+                });
+            }
+
+            return {
+                monday,
+                sunday,
+                dailyData,
+                totalNormalMs,
+                totalOvertimeMs,
+                totalAllMs: totalNormalMs + totalOvertimeMs,
+                totalOvertimePay,
+                totalTargetHours,
+                overtimeDaysCount
+            };
+        }
+
+        function updateDashboardStats() {
+            const stats = getWeeklyStats(0);
+
+            // Actualizar tarjetas KPI
+            document.getElementById('kpi-normal-hours').textContent = `${formatDecimalHours(stats.totalNormalMs)}h`;
+            document.getElementById('kpi-target-week').textContent = `/ ${stats.totalTargetHours}h meta`;
+
+            const weekPct = stats.totalTargetHours > 0
+                ? Math.min(100, Math.round(((stats.totalNormalMs / 3600000) / stats.totalTargetHours) * 100))
+                : 0;
+            document.getElementById('kpi-week-bar').style.width = `${weekPct}%`;
+
+            document.getElementById('kpi-overtime-hours').textContent = `${formatDecimalHours(stats.totalOvertimeMs)}h`;
+            document.getElementById('kpi-overtime-days').textContent = `En ${stats.overtimeDaysCount} ${stats.overtimeDaysCount === 1 ? 'día' : 'días'} de la semana`;
+
+            document.getElementById('kpi-overtime-money').textContent = formatMoney(stats.totalOvertimePay);
+            document.getElementById('kpi-rate-info').textContent = `Tarifa: ${formatMoney(parseFloat(appState.settings.overtimeRate || 0))} / hora extra`;
+
+            document.getElementById('kpi-total-hours').textContent = `${formatDecimalHours(stats.totalAllMs)}h`;
+            const rangeStr = `${stats.monday.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })} - ${stats.sunday.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}`;
+            document.getElementById('kpi-week-range').textContent = rangeStr;
+
+            // Actualizar lista de resumen por día
+            const listEl = document.getElementById('weekly-breakdown-list');
+            const todayStr = getTodayStr();
+            listEl.innerHTML = stats.dailyData.map(d => {
+                const isToday = d.dateStr === todayStr;
+                const hasOt = d.overtimeMs > 0;
+                return `
+                    <div class="flex items-center justify-between p-2.5 rounded-xl ${isToday ? 'bg-indigo-500/10 border border-indigo-500/30' : 'bg-slate-50 dark:bg-slate-850'}">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-semibold ${isToday ? 'text-indigo-500' : ''}">${d.dayName}</span>
+                                ${isToday ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500 text-white font-bold">HOY</span>' : ''}
+                            </div>
+                            <span class="text-xs text-slate-400">Meta: ${d.baseHours}h</span>
+                        </div>
+                        <div class="text-right font-mono">
+                            <div class="text-sm font-bold">${formatDecimalHours(d.totalMs)}h</div>
+                            ${hasOt
+                                ? `<div class="text-xs text-amber-500 font-semibold">+${formatDecimalHours(d.overtimeMs)}h extra</div>`
+                                : `<div class="text-[11px] text-slate-400">0.00h extra</div>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Actualizar Gráfico
+            updateChart(stats.dailyData);
+        }
+
+        // --- GRÁFICO CON CHART.JS ---
+        function initChart() {
+            const ctx = document.getElementById('weeklyChart').getContext('2d');
+            weeklyChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+                    datasets: [
+                        {
+                            label: 'Horas Normales',
+                            data: [0, 0, 0, 0, 0, 0, 0],
+                            backgroundColor: '#6366f1',
+                            borderRadius: 6,
+                        },
+                        {
+                            label: 'Horas Extras',
+                            data: [0, 0, 0, 0, 0, 0, 0],
+                            backgroundColor: '#f59e0b',
+                            borderRadius: 6,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', font: { family: 'Inter', weight: '600' } }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                callback: (val) => val + 'h'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleFont: { family: 'Inter', size: 13 },
+                            bodyFont: { family: 'JetBrains Mono', size: 12 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} hrs`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(dailyData) {
+            if (!weeklyChartInstance) return;
+            weeklyChartInstance.data.labels = dailyData.map(d => d.shortName);
+            weeklyChartInstance.data.datasets[0].data = dailyData.map(d => +(d.normalMs / 3600000).toFixed(2));
+            weeklyChartInstance.data.datasets[1].data = dailyData.map(d => +(d.overtimeMs / 3600000).toFixed(2));
+            weeklyChartInstance.update();
+        }
+
+        // --- HISTORIAL Y GESTIÓN DE REGISTROS ---
+        function renderHistory() {
+            const filter = document.getElementById('history-filter').value;
+            const tbody = document.getElementById('history-table-body');
+            const emptyState = document.getElementById('history-empty-state');
+
+            let filtered = [...appState.entries];
+
+            if (filter === 'current_week') {
+                const { monday, sunday } = getWeekBounds(0);
+                filtered = filtered.filter(e => {
+                    const d = parseLocalDate(e.dateStr);
+                    return d >= monday && d <= sunday;
+                });
+            } else if (filter === 'last_week') {
+                const { monday, sunday } = getWeekBounds(-1);
+                filtered = filtered.filter(e => {
+                    const d = parseLocalDate(e.dateStr);
+                    return d >= monday && d <= sunday;
+                });
+            }
+
+            // Ordenar más recientes primero
+            filtered.sort((a, b) => b.startTime - a.startTime);
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // Para calcular correctamente si hubo horas extras en el día cuando hay múltiples turnos el mismo día:
+            const dayTotalsMap = {};
+            appState.entries.forEach(e => {
+                dayTotalsMap[e.dateStr] = (dayTotalsMap[e.dateStr] || 0) + e.durationMs;
+            });
+
+            tbody.innerHTML = filtered.map(entry => {
+                const dObj = parseLocalDate(entry.dateStr);
+                const dayName = DAYS_NAMES[dObj.getDay()];
+                const startStr = new Date(entry.startTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                const endStr = new Date(entry.endTime).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+                // Proporción del día para mostrar impacto en horas extras
+                const totalDayMs = dayTotalsMap[entry.dateStr] || entry.durationMs;
+                const daySplit = calculateDaySplit(entry.dateStr, totalDayMs);
+                const ratio = totalDayMs > 0 ? (entry.durationMs / totalDayMs) : 1;
+
+                const entryNormalMs = daySplit.normalMs * ratio;
+                const entryOtMs = daySplit.overtimeMs * ratio;
+                const entryOtPay = daySplit.overtimePay * ratio;
+
+                return `
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-850/60 transition-colors">
+                        <td class="py-3.5 px-4">
+                            <div class="font-semibold text-slate-900 dark:text-white">${entry.dateStr}</div>
+                            <div class="text-xs text-slate-400">${dayName}</div>
+                        </td>
+                        <td class="py-3.5 px-4 font-mono text-xs">
+                            ${startStr} - ${endStr}
+                        </td>
+                        <td class="py-3.5 px-4 font-mono font-bold">
+                            ${formatDecimalHours(entry.durationMs)}h
+                        </td>
+                        <td class="py-3.5 px-4 font-mono text-indigo-500">
+                            ${formatDecimalHours(entryNormalMs)}h
+                        </td>
+                        <td class="py-3.5 px-4 font-mono ${entryOtMs > 0 ? 'text-amber-500 font-bold' : 'text-slate-400'}">
+                            ${formatDecimalHours(entryOtMs)}h
+                        </td>
+                        <td class="py-3.5 px-4 font-mono ${entryOtPay > 0 ? 'text-emerald-500 font-bold' : 'text-slate-400'}">
+                            ${formatMoney(entryOtPay)}
+                        </td>
+                        <td class="py-3.5 px-4 text-xs text-slate-500 dark:text-slate-400 max-w-[160px] truncate" title="${entry.note || ''}">
+                            ${entry.note || '-'}
+                        </td>
+                        <td class="py-3.5 px-4 text-right space-x-1">
+                            <button onclick="editEntry('${entry.id}')" class="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-colors" title="Editar">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button onclick="deleteEntry('${entry.id}')" class="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors" title="Eliminar">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- MODAL REGISTRO MANUAL / EDICIÓN ---
+        function openManualModal() {
+            document.getElementById('modal-title').textContent = 'Registrar Jornada Manual';
+            document.getElementById('edit-entry-id').value = '';
+            document.getElementById('manual-date').value = getTodayStr();
+            document.getElementById('manual-start').value = '08:00';
+            document.getElementById('manual-end').value = '17:00';
+            document.getElementById('manual-break').value = '0';
+            document.getElementById('manual-note').value = '';
+            
+            const modal = document.getElementById('manual-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function editEntry(id) {
+            const entry = appState.entries.find(e => e.id === id);
+            if (!entry) return;
+
+            const sDate = new Date(entry.startTime);
+            const eDate = new Date(entry.endTime);
+
+            document.getElementById('modal-title').textContent = 'Editar Jornada';
+            document.getElementById('edit-entry-id').value = entry.id;
+            document.getElementById('manual-date').value = entry.dateStr;
+            document.getElementById('manual-start').value = `${String(sDate.getHours()).padStart(2, '0')}:${String(sDate.getMinutes()).padStart(2, '0')}`;
+            document.getElementById('manual-end').value = `${String(eDate.getHours()).padStart(2, '0')}:${String(eDate.getMinutes()).padStart(2, '0')}`;
+            
+            // Calcular descanso implícito
+            const rawSpan = entry.endTime - entry.startTime;
+            const breakMins = Math.max(0, Math.round((rawSpan - entry.durationMs) / 60000));
+            document.getElementById('manual-break').value = breakMins;
+            document.getElementById('manual-note').value = entry.note || '';
+
+            const modal = document.getElementById('manual-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeManualModal() {
+            const modal = document.getElementById('manual-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveManualEntry(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-entry-id').value;
+            const dateStr = document.getElementById('manual-date').value;
+            const startStr = document.getElementById('manual-start').value;
+            const endStr = document.getElementById('manual-end').value;
+            const breakMins = parseInt(document.getElementById('manual-break').value || '0', 10);
+            const note = document.getElementById('manual-note').value.trim();
+
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const [sh, sm] = startStr.split(':').map(Number);
+            const [eh, em] = endStr.split(':').map(Number);
+
+            const startTime = new Date(y, m - 1, d, sh, sm, 0).getTime();
+            let endTime = new Date(y, m - 1, d, eh, em, 0).getTime();
+
+            // Soporte para turnos nocturnos que cruzan medianoche
+            if (endTime <= startTime) {
+                endTime += 24 * 3600000;
+            }
+
+            const durationMs = endTime - startTime - (breakMins * 60000);
+            if (durationMs <= 0) {
+                showToast('La duración neta debe ser mayor a 0 minutos.', 'error');
+                return;
+            }
+
+            if (id) {
+                const idx = appState.entries.findIndex(item => item.id === id);
+                if (idx !== -1) {
+                    appState.entries[idx] = { ...appState.entries[idx], dateStr, startTime, endTime, durationMs, note };
+                    showToast('Jornada actualizada correctamente.', 'success');
+                }
+            } else {
+                appState.entries.push({
+                    id: 'entry_' + Date.now(),
+                    dateStr,
+                    startTime,
+                    endTime,
+                    durationMs,
+                    note: note || 'Registro manual'
+                });
+                showToast('Jornada agregada al historial.', 'success');
+            }
+
+            saveState();
+            closeManualModal();
+            updateAllUI();
+        }
+
+        function deleteEntry(id) {
+            openConfirmModal(
+                'Eliminar registro',
+                '¿Deseas eliminar este turno del historial? Esta acción no se puede deshacer.',
+                () => {
+                    appState.entries = appState.entries.filter(e => e.id !== id);
+                    saveState();
+                    updateAllUI();
+                    showToast('Registro eliminado.', 'info');
+                }
+            );
+        }
+
+        // --- REPORTE SEMANAL (TEXTO Y DESCARGA .TXT) ---
+        function saveEmployeeName() {
+            appState.settings.employeeName = document.getElementById('report-employee-name').value;
+            saveState();
+        }
+
+        function generateReportPreview() {
+            const offset = parseInt(document.getElementById('report-week-select').value, 10);
+            const stats = getWeeklyStats(offset);
+            const empName = appState.settings.employeeName.trim();
+
+            const startFmt = stats.monday.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const endFmt = stats.sunday.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            let lines = [];
+            lines.push(`📊 REPORTE SEMANAL DE HORAS LABORALES`);
+            lines.push(`=========================================`);
+            if (empName) lines.push(`👤 Colaborador: ${empName}`);
+            lines.push(`📅 Período: ${startFmt} al ${endFmt}`);
+            lines.push(``);
+            lines.push(`📋 DESGLOSE POR DÍA:`);
+
+            stats.dailyData.forEach(d => {
+                const totalH = formatDecimalHours(d.totalMs);
+                const normH = formatDecimalHours(d.normalMs);
+                const extH = formatDecimalHours(d.overtimeMs);
+                if (d.totalMs > 0) {
+                    lines.push(`• ${d.dayName.padEnd(10, ' ')}: ${totalH}h total (${normH}h normal | +${extH}h extra)`);
+                } else {
+                    lines.push(`• ${d.dayName.padEnd(10, ' ')}: Sin actividad`);
+                }
+            });
+
+            lines.push(``);
+            lines.push(`📈 RESUMEN TOTAL DE LA SEMANA:`);
+            lines.push(`-----------------------------------------`);
+            lines.push(`• Horas Normales:   ${formatDecimalHours(stats.totalNormalMs)} hrs (Meta: ${stats.totalTargetHours}h)`);
+            lines.push(`• Horas Extras:     ${formatDecimalHours(stats.totalOvertimeMs)} hrs`);
+            lines.push(`• Total Trabajado:  ${formatDecimalHours(stats.totalAllMs)} hrs`);
+            lines.push(`• Tarifa Hora Extra: ${formatMoney(parseFloat(appState.settings.overtimeRate || 0))}`);
+            lines.push(`💰 TOTAL A COBRAR EXTRAS: ${formatMoney(stats.totalOvertimePay)}`);
+            lines.push(`=========================================`);
+            lines.push(`Generado con TimeTrack Pro`);
+
+            document.getElementById('report-preview-text').value = lines.join('\n');
+        }
+
+        function copyReportToClipboard() {
+            const textarea = document.getElementById('report-preview-text');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                showToast('¡Reporte copiado al portapapeles! Listo para pegar.', 'success');
+            } catch (err) {
+                showToast('No se pudo copiar automáticamente.', 'error');
+            }
+            window.getSelection().removeAllRanges();
+        }
+
+        function downloadReportTxt() {
+            const text = document.getElementById('report-preview-text').value;
+            const offset = parseInt(document.getElementById('report-week-select').value, 10);
+            const { monday } = getWeekBounds(offset);
+            const fileName = `Reporte_Horas_${getTodayStr(monday)}.txt`;
+
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast(`Archivo "${fileName}" descargado.`, 'success');
+        }
+
+        // --- CONFIGURACIÓN Y RESPALDOS ---
+        function populateSettingsUI() {
+            WEEK_ORDER.forEach(dayIdx => {
+                const input = document.getElementById(`cfg-day-${dayIdx}`);
+                if (input) input.value = appState.settings.schedule[dayIdx] ?? 0;
+            });
+            document.getElementById('cfg-currency').value = appState.settings.currency || '$';
+            document.getElementById('cfg-overtime-rate').value = appState.settings.overtimeRate ?? 15;
+            document.getElementById('report-employee-name').value = appState.settings.employeeName || '';
+            updateTotalWeeklyConfigLabel();
+        }
+
+        function updateTotalWeeklyConfigLabel() {
+            let sum = 0;
+            WEEK_ORDER.forEach(dayIdx => {
+                sum += parseFloat(document.getElementById(`cfg-day-${dayIdx}`).value || 0);
+            });
+            document.getElementById('cfg-total-weekly-hours').textContent = `${sum}h`;
+        }
+
+        function applyStandardWeek() {
+            [1, 2, 3, 4, 5].forEach(d => document.getElementById(`cfg-day-${d}`).value = 8);
+            [6, 0].forEach(d => document.getElementById(`cfg-day-${d}`).value = 0);
+            updateTotalWeeklyConfigLabel();
+            showToast('Horario estándar (8h Lun-Vie) aplicado. Guarda para confirmar.', 'info');
+        }
+
+        function saveSettings() {
+            WEEK_ORDER.forEach(dayIdx => {
+                const val = parseFloat(document.getElementById(`cfg-day-${dayIdx}`).value);
+                appState.settings.schedule[dayIdx] = isNaN(val) || val < 0 ? 0 : val;
+            });
+            appState.settings.currency = document.getElementById('cfg-currency').value;
+            const rate = parseFloat(document.getElementById('cfg-overtime-rate').value);
+            appState.settings.overtimeRate = isNaN(rate) || rate < 0 ? 0 : rate;
+
+            saveState();
+            updateTotalWeeklyConfigLabel();
+            updateAllUI();
+            showToast('Configuración guardada y aplicada.', 'success');
+        }
+
+        function exportBackupJSON() {
+            const dataStr = JSON.stringify(appState, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Respaldo_TimeTrack_${getTodayStr()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Copia de seguridad descargada.', 'success');
+        }
+
+        function importBackupJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!imported.settings || !Array.isArray(imported.entries)) {
+                        throw new Error('Formato inválido');
+                    }
+                    appState = imported;
+                    saveState();
+                    populateSettingsUI();
+                    updateAllUI();
+                    showToast('¡Respaldo restaurado con éxito!', 'success');
+                } catch (err) {
+                    showToast('El archivo seleccionado no es un respaldo válido.', 'error');
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function openResetConfirm() {
+            openConfirmModal(
+                '¿Borrar todos los datos?',
+                'Se eliminarán todos tus registros de horas y volverás a la configuración inicial. Te recomendamos exportar un respaldo antes.',
+                () => {
+                    localStorage.removeItem(STORAGE_KEY);
+                    location.reload();
+                }
+            );
+        }
+
+        // --- NAVEGACIÓN, TEMA Y MODALES AUXILIARES ---
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+
+            // Estilos botones desktop
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = 'nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white';
+            });
+            const activeNav = document.getElementById(`nav-${tabName}`);
+            if (activeNav) {
+                activeNav.className = 'nav-btn px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm';
+            }
+
+            // Estilos botones móvil
+            document.querySelectorAll('.mob-btn').forEach(btn => {
+                btn.className = 'mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400 border-b-2 border-transparent';
+            });
+            const activeMob = document.getElementById(`mob-${tabName}`);
+            if (activeMob) {
+                activeMob.className = 'mob-btn flex-1 py-2.5 text-xs font-medium flex flex-col items-center gap-1 text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500';
+            }
+
+            if (tabName === 'report') generateReportPreview();
+            if (tabName === 'history') renderHistory();
+            if (tabName === 'dashboard') updateDashboardStats();
+        }
+
+        function toggleTheme() {
+            const newTheme = appState.settings.theme === 'dark' ? 'light' : 'dark';
+            appState.settings.theme = newTheme;
+            saveState();
+            applyTheme(newTheme);
+        }
+
+        function applyTheme(theme) {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (theme === 'dark') {
+                html.classList.add('dark');
+                icon.className = 'fa-solid fa-sun';
+            } else {
+                html.classList.remove('dark');
+                icon.className = 'fa-solid fa-moon';
+            }
+        }
+
+        function openConfirmModal(title, desc, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-desc').textContent = desc;
+            const btn = document.getElementById('confirm-action-btn');
+            btn.onclick = () => {
+                closeConfirmModal();
+                onConfirm();
+            };
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-rose-600 text-white',
+                warning: 'bg-amber-500 text-slate-950',
+                info: 'bg-slate-800 text-white border border-slate-700'
+            };
+
+            const icons = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-exclamation',
+                warning: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-sm font-medium transform transition-all duration-300 translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${message}</span>`;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        function updateAllUI() {
+            updateLiveClockUI();
+            updateDashboardStats();
+            renderHistory();
+            generateReportPreview();
+        }
+    </script>
+</body>
+</html>
